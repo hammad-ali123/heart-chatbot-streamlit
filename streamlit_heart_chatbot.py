@@ -12,8 +12,8 @@ from reportlab.pdfgen import canvas
 
 CSV_FILE = "prediction_history.csv"
 
-model = joblib.load("lr_model.pkl")
-scaler = joblib.load("lr_scaler.pkl")
+model = joblib.load("model.pkl")
+scaler = joblib.load("scaler.pkl")
 
 st.title("🫀 Heart Disease Risk Chatbot (Logistic Regression)")
 st.markdown("Answer the questions below to assess your heart disease risk.")
