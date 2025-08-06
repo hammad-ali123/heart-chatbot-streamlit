@@ -1,30 +1,22 @@
 import streamlit as st
 import joblib
 import numpy as np
-import pandas as pd
-from datetime import datetime
-import os
 import matplotlib.pyplot as plt
+from datetime import datetime
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 # Load model and scaler
-model = joblib.load("model.pkl")
-scaler = joblib.load("scaler.pkl")
+model = joblib.load("lr_model.pkl")
+scaler = joblib.load("lr_scaler.pkl")
 
-# File to store prediction history
-CSV_FILE = "prediction_history.csv"
-
+# Streamlit settings
 st.set_page_config(page_title="Heart Disease Risk Chatbot", page_icon="🫀")
 st.title("🫀 Heart Disease Risk Chatbot (Chat-Style)")
-st.markdown("Type your responses in the chat to assess your heart disease risk.")
+st.markdown("Answer the following questions one by one to assess your heart disease risk.")
 
-# Session state for chatbot
-if "step" not in st.session_state:
-    st.session_state.step = 0
-    st.session_state.inputs = {}
-
+# Field order and questions
 questions = [
     ("age", "What is your age?"),
     ("sex", "What is your biological sex? (0 = Female, 1 = Male)"),
@@ -41,15 +33,7 @@ questions = [
     ("thal", "Thalassemia (0 = Normal, 1 = Fixed defect, 2 = Reversible defect)?")
 ]
 
-def save_prediction(data, prediction):
-    data["prediction (%)"] = round(prediction, 2)
-    data["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    df = pd.DataFrame([data])
-    if os.path.exists(CSV_FILE):
-        df.to_csv(CSV_FILE, mode='a', header=False, index=False)
-    else:
-        df.to_csv(CSV_FILE, mode='w', header=True, index=False)
-
+# PDF generator
 def generate_pdf(input_data, prediction):
     field_names = {
         "age": "Age",
@@ -69,41 +53,45 @@ def generate_pdf(input_data, prediction):
 
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
-    textobject = c.beginText(40, 750)
-    textobject.setFont("Helvetica", 12)
-    textobject.textLine("Heart Disease Risk Assessment Report")
-    textobject.textLine("--------------------------------------")
-    for key, value in input_data.items():
-        textobject.textLine(f"{field_names[key]}: {value}")
-    textobject.textLine(f"\nPredicted Risk: {round(prediction, 2)}%")
-    textobject.textLine(f"Date/Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    c.drawText(textobject)
+    text = c.beginText(40, 750)
+    text.setFont("Helvetica", 12)
+    text.textLine("Heart Disease Risk Assessment Report")
+    text.textLine("--------------------------------------")
+    for k, v in input_data.items():
+        label = field_names.get(k, k)
+        text.textLine(f"{label}: {v}")
+    text.textLine(f"\nPredicted Risk: {round(prediction, 2)}%")
+    text.textLine(f"Date/Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    c.drawText(text)
     c.showPage()
     c.save()
     buffer.seek(0)
     return buffer
 
-# Chat input handler
-user_input = st.chat_input(questions[st.session_state.step][1] if st.session_state.step < len(questions) else "")
+# Streamlit session state
+if "step" not in st.session_state:
+    st.session_state.step = 0
+    st.session_state.inputs = {}
 
-if user_input:
-    key, _ = questions[st.session_state.step]
-    try:
-        value = float(user_input) if "." in user_input or key == "oldpeak" else int(user_input)
-        st.session_state.inputs[key] = value
-        st.session_state.step += 1
-    except ValueError:
-        st.error("❌ Please enter a valid number.")
+# Display chatbot question
+if st.session_state.step < len(questions):
+    _, q_text = questions[st.session_state.step]
+    user_input = st.chat_input(q_text)
+    if user_input:
+        key = questions[st.session_state.step][0]
+        try:
+            value = float(user_input) if "." in user_input or key == "oldpeak" else int(user_input)
+            st.session_state.inputs[key] = value
+            st.session_state.step += 1
+        except ValueError:
+            st.error("Please enter a valid number.")
 
-# Once all inputs are received
+# When all data is collected
 if st.session_state.step == len(questions):
     input_order = [k for k, _ in questions]
     input_list = [st.session_state.inputs[k] for k in input_order]
     input_array = scaler.transform([input_list])
     prediction = model.predict_proba(input_array)[0][1] * 100
-
-    # Save and show
-    save_prediction(st.session_state.inputs, prediction)
 
     st.success(f"🧠 Your predicted heart disease risk is **{round(prediction, 2)}%**.")
     if prediction > 70:
@@ -113,26 +101,19 @@ if st.session_state.step == len(questions):
     else:
         st.info("✅ This appears to be a low risk. Keep up the healthy lifestyle!")
 
-    # Pie Chart
+    # Pie chart
     labels = ['At Risk', 'No Risk']
     sizes = [round(prediction, 2), 100 - round(prediction, 2)]
-    colors = ['red', 'green']
     fig, ax = plt.subplots()
-    ax.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
+    ax.pie(sizes, labels=labels, colors=['red', 'green'], autopct='%1.1f%%', startangle=90)
     ax.axis('equal')
     st.markdown("### 🧩 Risk Distribution")
     st.pyplot(fig)
 
-    # PDF Download
+    # PDF download
     pdf = generate_pdf(st.session_state.inputs, prediction)
-    st.download_button("📄 Download PDF Report", data=pdf,
-                       file_name="heart_risk_report.pdf", mime="application/pdf")
+    st.download_button("📄 Download PDF Report", data=pdf, file_name="heart_risk_report.pdf", mime="application/pdf")
 
-    # Reset
+    # Reset session for new user
     st.session_state.step = 0
     st.session_state.inputs = {}
-
-# CSV download
-if os.path.exists(CSV_FILE):
-    with open(CSV_FILE, "rb") as f:
-        st.download_button("📥 Download All Predictions", f, file_name=CSV_FILE)
