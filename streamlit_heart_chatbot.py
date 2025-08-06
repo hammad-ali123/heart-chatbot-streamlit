@@ -10,8 +10,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 # Load model and scaler
-model = joblib.load("lr_model.pkl")
-scaler = joblib.load("lr_scaler.pkl")
+model = joblib.load("model.pkl")
+scaler = joblib.load("scaler.pkl")
 
 # File to store prediction history
 CSV_FILE = "prediction_history.csv"
