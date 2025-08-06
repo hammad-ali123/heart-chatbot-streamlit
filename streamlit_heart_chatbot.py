@@ -8,8 +8,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 # Load model and scaler
-model = joblib.load("lr_model.pkl")
-scaler = joblib.load("lr_scaler.pkl")
+model = joblib.load("model.pkl")
+scaler = joblib.load("scaler.pkl")
 
 # Streamlit settings
 st.set_page_config(page_title="Heart Disease Risk Chatbot", page_icon="🫀")
